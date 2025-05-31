@@ -1,0 +1,26 @@
+[MASTER]
+max-line-length=152
+
+[MESSAGES CONTROL]
+disable=missing-docstring,
+        too-few-public-methods,
+        deprecated-module,
+        unused-argument,
+        raise-missing-from,
+        unused-variable,
+        subprocess-run-check,
+        duplicate-code,
+        import-error,
+        protected-access,
+        broad-exception-caught,
+        attribute-defined-outside-init,
+        missing-timeout,
+        too-many-instance-attributes,
+        unspecified-encoding,
+        too-many-locals,
+        too-many-statements,
+        f-string-without-interpolation,
+        assignment-from-no-return
+
+[FORMAT]
+max-line-length=152

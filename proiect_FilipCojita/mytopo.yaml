@@ -1,0 +1,258 @@
+testbed:
+  name: my_topology
+
+devices:
+  IOU1:
+    os: ios
+    type: router
+    custom:
+      hostname: em-r1
+      static_routes:
+        - { dest: 192.168.105.0, next_hop: 192.168.101.2 }
+        - { dest: 192.168.106.0, next_hop: 192.168.101.2 }
+        - { dest: 192.168.107.0, next_hop: 192.168.102.2 }
+        - { dest: 192.168.108.0, next_hop: 192.168.102.2 }
+        - { dest: 192.168.109.0, next_hop: 192.168.103.2 }
+    credentials:
+      default:
+        username: admin
+        password: Cisco!23
+      enable:
+        password: Cisco!23
+    connections:
+      telnet:
+        class: telnet_connector2.TelnetConnector2
+        protocol: telnet
+        ip: 192.168.0.100
+        port: 5020
+      ssh:
+        class: ssh_connector_paramiko.SSHConnectorParamiko
+        protocol: ssh
+        ip: 192.168.11.1
+        port: 22
+        arguments:
+          ssh_options: "-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=no"
+      napalm:
+        class: napalm
+        protocol: napalm
+        ip: 192.168.11.1
+        port: 22
+        credentials:
+          login:
+            username: admin
+            password: Cisco!23
+
+  CSR:
+    os: iosxe
+    type: router
+    platform: iou
+    custom:
+      gateway:
+        dest: 192.168.11.0
+        next_hop: 192.168.101.1
+      hostname: em-r2
+      static_routes:
+        - { dest: 192.168.102.0, next_hop: 192.168.101.1 }
+        - { dest: 192.168.103.0, next_hop: 192.168.101.1 }
+        - { dest: 192.168.107.0, next_hop: 192.168.106.2 }
+        - { dest: 192.168.108.0, next_hop: 192.168.101.1 }
+        - { dest: 192.168.109.0, next_hop: 192.168.106.2 }
+      dhcp:
+        - network: 192.168.105.0
+          mask: 255.255.255.0
+          default_router: 192.168.105.1
+          dns_server: 8.8.8.8
+          excluded: [ 192.168.105.0, 192.168.105.10 ]
+        - network: 192.168.108.0
+          mask: 255.255.255.0
+          default_router: 192.168.108.1
+          dns_server: 8.8.8.8
+          excluded: [ 192.168.108.0, 192.168.108.10 ]
+        - network: 192.168.109.0
+          mask: 255.255.255.0
+          default_router: 192.168.109.1
+          dns_server: 8.8.8.8
+          excluded: [ 192.168.109.0, 192.168.109.10 ]
+    credentials:
+      default:
+        username: user
+        password: pass
+      enable:
+        password: Cisco!12
+    connections:
+      telnet:
+        class: telnet_connector2.TelnetConnector2
+        protocol: telnet
+        ip: '192.168.0.100'
+        port: 5087
+      ssh:
+        class: ssh_connector_paramiko.SSHConnectorParamiko
+        protocol: ssh
+        ip: 192.168.101.2
+        port: 22
+      rest:
+        class: rest_connector.RESTConnector
+        protocol: rest
+        ip: 192.168.100.2
+        port: 443
+
+  IOSv:
+    os: ios
+    type: router
+    platform: iosv
+    custom:
+      hostname: iosv
+      gateway:
+        dest: 192.168.11.0
+        next_hop: 192.168.102.1
+      static_routes:
+        - { dest: 192.168.101.0, next_hop: 192.168.102.1 }
+        - { dest: 192.168.103.0, next_hop: 192.168.102.1 }
+        - { dest: 192.168.105.0, next_hop: 192.168.102.1 }
+        - { dest: 192.168.106.0, next_hop: 192.168.102.1 }
+        - { dest: 192.168.109.0, next_hop: 192.168.107.2 }
+    credentials:
+      default:
+        username: admin
+        password: Cisco!23
+      enable:
+        password: Cisco!2345
+    connections:
+      telnet:
+        class: telnet_connector2.TelnetConnector2
+        protocol: telnet
+        ip: 192.168.0.100
+        port: 5102
+      ssh:
+        class: ssh_connector_paramiko.SSHConnectorParamiko
+        protocol: ssh
+        ip: 192.168.102.2
+        port: 22
+        arguments:
+          ssh_options: "-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=no"
+
+  FTD:
+    os: ftd
+    type: ftd
+    custom:
+      hostname: FTD
+      dns: 192.168.106.11
+    connections:
+      telnet:
+        class: telnet_connector2.TelnetConnector2
+        protocol: telnet
+        ip: 192.168.0.100
+        port: 5021
+        credentials:
+          login:
+            username: admin
+            password: Admin123
+      ssh:
+        protocol: ssh #
+        class: ssh_connector_paramiko.SSHConnectorParamiko #
+        ip: 192.168.103.2
+        port: 22
+        credentials:
+          login:
+            username: admin
+            password: Cisco@135
+      rest: ###
+        protocol: https
+        class: swagger_connector.SwaggerConnector #
+        ip: 192.168.103.2 #103.2
+        port: 443
+        credentials:
+          login:
+            username: admin
+            password: Cisco@135 #pass for admin connection
+
+topology:
+  IOU1:
+    interfaces:
+      Ethernet0/0:
+        alias: initial
+        type: ethernet
+        link: ubuntu
+        ipv4: 192.168.11.1/24
+      Ethernet0/1:
+        type: ethernet
+        link: csr
+        ipv4: 192.168.101.1/24
+      Ethernet0/2:
+        type: ethernet
+        link: link-ios15
+        ipv4: 192.168.102.1/24
+      Ethernet0/3:
+        type: ethernet
+        link: ftd_mgmt
+        ipv4: 192.168.103.1/24
+      Ethernet1/0:
+        alias: future_conn
+        type: ethernet
+        link: future_dev
+        ipv4: 192.168.104.1/24
+
+  CSR:
+    interfaces:
+      GigabitEthernet1:
+        alias: initial
+        type: ethernet
+        link: csr
+        ipv4: 192.168.101.2/24
+      GigabitEthernet2:
+        type: ethernet
+        alias: to_DockerGuest1
+        link: link-docker1
+        ipv4: 192.168.105.1/24
+      GigabitEthernet3:
+        type: ethernet
+        alias: to_FTD
+        link: link-ftd3
+        ipv4: 192.168.106.1/24
+
+  IOSv:
+    interfaces:
+      GigabitEthernet0/0:
+        type: ethernet
+        alias: initial
+        link: link-ios15
+        ipv4: 192.168.102.2/24
+      GigabitEthernet0/1:
+        type: ethernet
+        alias: to_FTD
+        link: link-ftd2
+        ipv4: 192.168.107.1/24
+      GigabitEthernet0/2:
+        type: ethernet
+        alias: to_DNS
+        link: link-dns
+        ipv4: 192.168.108.1/24
+
+  FTD:
+    interfaces:
+      eth0:
+        type: ethernet
+        alias: mgmt
+        link: ftd_mgmt
+        ipv4: 192.168.103.2/24
+      Management0/0:
+        type: ethernet
+        alias: diagnostic
+        link: ftd_mgmt
+        ipv4: 192.168.111.2/24
+
+      GigabitEthernet0/0:
+        type: ethernet
+        alias: to_iosv15
+        link: link-ftd2
+        ipv4: 192.168.107.2/24
+      GigabitEthernet0/1:
+        type: ethernet
+        alias: to_dockerguest2
+        link: link-docker2
+        ipv4: 192.168.109.1/24
+      GigabitEthernet0/2:
+        type: ethernet
+        alias: to_csr
+        link: link-ftd3
+        ipv4: 192.168.106.2/24
