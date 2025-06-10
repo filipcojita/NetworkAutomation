@@ -33,6 +33,7 @@ class Example3(aetest.Testcase):
         with steps.start("configure Interface"):
             existing_object = swagger.client.Interface.getPhysicalInterfaceList().result()['items']
             for obj in existing_object:
+
                 if obj.hardwareName == 'GigabitEthernet0/0':
                     obj.ipv4.ipAddress.ipAddress = device_fdm.interfaces['GigabitEthernet0/0'].ipv4.ip.compressed
                     obj.ipv4.ipAddress.netmask = device_fdm.interfaces['GigabitEthernet0/0'].ipv4.netmask.compressed

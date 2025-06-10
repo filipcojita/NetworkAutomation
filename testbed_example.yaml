@@ -94,7 +94,7 @@ devices:
     connections:
       telnet:
         class: lib.telnet_connector.TelnetConnector
-        prtocol: telnet
+        protocol: telnet
         ip: 192.168.0.100
         port: 5078
         credentials:
@@ -113,12 +113,12 @@ devices:
       rest:
         class: lib.swagger_connector.SwaggerConnector
         protocol: https
-        ip: 192.168.110.2
+        ip: 192.168.103.2
         port: 443
         credentials:
           login:
             username: admin
-            password: Cisco@135
+            password: password
 
 topology:
   IOU1:
@@ -191,21 +191,21 @@ topology:
         ipv4: 192.168.111.2/24
       GigabitEthernet0/0:
         type: ethernet
-        alias: to_IOU1
+        alias: to_iou1
         link: link-ftd1
-        ipv4: 192.168.104.2/24
+        ipv4: 192.168.103.2/24
       GigabitEthernet0/1:
         type: ethernet
-        alias: to_IOSv15
+        alias: to_iosv15
         link: link-ftd2
         ipv4: 192.168.107.2/24
       GigabitEthernet0/2:
         type: ethernet
-        alias: to_DockerGuest2
+        alias: to_dockerguest2
         link: link-docker2
         ipv4: 192.168.109.1/24
       GigabitEthernet0/3:
         type: ethernet
-        alias: to_CSR
+        alias: to_csr
         link: link-ftd3
         ipv4: 192.168.106.2/24

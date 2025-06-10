@@ -10,7 +10,7 @@ from genie.libs.conf.interface.iosxe import Interface
 
 tb = loader.load('testbed_example2.yaml')
 device_csr = tb.devices['em-r2']
-device_iosv = tb.devices['IOSv15']
+device_iosv = tb.devices['iosv']
 
 #
 # class Example(aetest.Testcase):
@@ -57,7 +57,7 @@ class Example2(aetest.Testcase):
         with steps.start('Configure OSPF on IOSV'):
             ospf = Ospf()
             ospf.device_attr[device_iosv].vrf_attr['default'].instance = '1'
-            ospf.device_attr[device_iosv].vrf_attr['default'].router_id = '192.168.103.2'
+            ospf.device_attr[device_iosv].vrf_attr['default'].router_id = '192.168.102.2'
             area = ospf.device_attr[device_iosv].vrf_attr['default'].area_attr[0]
             area.area = 0
             # area.networks.append('192.168.107.0 0.0.0.255')

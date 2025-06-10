@@ -1,4 +1,4 @@
-"""Modul pentru configurarea dispozitivului FTD folosind API Swagger prin pyATS."""
+"""Module for configuring FTD device using API Swagger with pyATS."""
 
 import ssl
 from pyats import aetest
@@ -13,11 +13,11 @@ device_fdm = tb.devices['FTD']
 
 
 class Example3(aetest.Testcase):
-    """Testcase pyATS pentru configurarea interfețelor și politicilor FTD."""
+    """Testcase pyATS for interface config and FTD policies."""
 
     @aetest.test
     def configure_fdm_interface(self, steps: Steps) -> None:
-        """Configurează interfețele și setările de rețea pe dispozitivul FTD."""
+        """conf interfaces and network settings on FTD."""
 
         with steps.start('Connect to FDM'):
             swagger: SwaggerConnector = device_fdm.connections.rest['class'](device_fdm)
@@ -89,23 +89,23 @@ class Example3(aetest.Testcase):
         with steps.start('Create network object'):
             network_object_model = swagger.client.get_model('NetworkObject')
 
-            # Creează un obiect de tip 'host' pentru gateway
+            # create a 'host' type obj for ftd
             gateway_object = network_object_model(
                 name="GATEWAY-OBJ",
                 value="192.168.103.1",
                 subType="HOST"
             )
             result1 = swagger.client.NetworkObject.addNetworkObject(body=gateway_object).result()
-            print(f"[INFO] Obiect HOST creat: {result1.name} - {result1.value}")
+            print(f"[INFO] HOST object created: {result1.name} - {result1.value}")
 
-            # Creează un obiect de tip 'network' pentru LAN
+            # create a 'network' type obj for ftd
             lan_object = network_object_model(
                 name="LAN-OBJ",
                 value="192.168.103.0/24",
                 subType="NETWORK"
             )
             result2 = swagger.client.NetworkObject.addNetworkObject(body=lan_object).result()
-            print(f"[INFO] Obiect NETWORK creat: {result2.name} - {result2.value}")
+            print(f"[INFO] NETWORK object created: {result2.name} - {result2.value}")
 
         with steps.start('Create Static Route'):
             model = swagger.client.get_model('StaticRouteEntry')

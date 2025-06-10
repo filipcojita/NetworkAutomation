@@ -6,11 +6,23 @@ to be done via ssh
 
 import re
 import time
+import logging
 from typing import Optional, List, Union
 import paramiko
 from pyats.datastructures import AttrDict
 from pyats.topology import Device
 
+logger = logging.getLogger(__name__)
+
+# Disable propagation to prevent pyATS from double-logging
+logger.propagate = False
+
+# Configure only if no handlers exist (prevent duplicates)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('> %(message)s'))  # Simple arrow prefix
+    logger.addHandler(handler)
 
 class SSHConnectorParamiko:
     DEFAULT_PROMPT: str = r'[>#]'
@@ -88,6 +100,9 @@ class SSHConnectorParamiko:
 
     def disconnect(self) -> None:
         """Close the SSH shell and client connections."""
+        self.execute('end', prompt=r'#')
+        self.execute('write', prompt=r'#')
+
         if self.shell:
             self.shell.close()
         if self.client:
@@ -152,6 +167,9 @@ class SSHConnectorParamiko:
             raise RuntimeError("SSH connection is not established. Call connect() first.")
 
         prompt = prompt or self.DEFAULT_PROMPT
+
+        logger.info(command)
+
         try:
             self.shell.send(f"{command}\n".encode())
             output = self._read_until_prompt(prompt, timeout)
@@ -190,15 +208,23 @@ class SSHConnectorParamiko:
             next_hop = route['next_hop']
             self.execute(f"ip route {dest} {mask} {next_hop}", prompt=r'\(config\)#')
 
-        hostname = getattr(self.device.custom, 'hostname', '').lower()
-        if hostname == 'em-r1':
-            self.execute('interface eth0/2', prompt=r'\(config-if\)#')
-            self.execute('ip helper-address 192.168.105.1', prompt=r'\(config-if\)#')
-            self.execute('exit', prompt=r'\(config\)#')
-        elif hostname == 'iosv':
-            self.execute('interface g0/2', prompt=r'\(config-if\)#')
-            self.execute('ip helper-address 192.168.105.1', prompt=r'\(config-if\)#')
-            self.execute('exit', prompt=r'\(config\)#')
+        if 'ip_helper' in self.device.custom:
+            for iface_name, iface in self.device.interfaces.items():
+                # Check if the interface's alias matches the next_hop
+                if hasattr(iface, 'alias') and iface.alias == self.device.custom['ip_helper']['next_hop']:
+                    self.execute(f'interface {iface_name}', prompt=r'\(config-if\)#')
+                    self.execute(f'ip helper-address {self.device.custom["ip_helper"]["ip"]}',
+                                 prompt=r'\(config-if\)#')
+                    self.execute('exit', prompt=r'\(config\)#')
 
-        self.execute('end', prompt=r'#')
-        self.execute('write', prompt=r'#')
+    def configure_dhcp(self) -> None:
+        # configure dhcp for csr device
+        if "dhcp" in self.device.custom:
+            for pool in self.device.custom["dhcp"]:
+                self.execute(f"ip dhcp excluded-address {pool['excluded'][0]} {pool['excluded'][1]}",
+                             prompt=[r'\(config\)#'])
+                pool_name = f"POOL_{pool['network'].replace('.', '_')}"
+                self.execute(f"ip dhcp pool {pool_name}", prompt=[r'\(dhcp-config\)#'])
+                self.execute(f"network {pool['network']} {pool['mask']}", prompt=[r'\(dhcp-config\)#'])
+                self.execute(f"default-router {pool['default_router']}", prompt=[r'\(dhcp-config\)#'])
+                self.execute(f"dns-server {pool['dns_server']}", prompt=[r'\(dhcp-config\)#'])

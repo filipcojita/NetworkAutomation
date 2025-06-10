@@ -3,13 +3,16 @@ usage file - configure all devices in topology
 """
 from pyats import aetest
 from pyats.topology import loader
-
+import logging
+from ubuntu_setup import UbuntuNetworkConfigurator
 from telnet_connector2 import TelnetConnector2
 from ssh_connector_paramiko import SSHConnectorParamiko
 
 # Load the topology
 tb = loader.load('mytopo.yaml')
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, encoding='utf-8')
 
 class AllDevicesTelnetSSHTest(aetest.Testcase):
 
@@ -17,6 +20,16 @@ class AllDevicesTelnetSSHTest(aetest.Testcase):
     def configure_all_devices(self):
         for device_name, dev in tb.devices.items():
             print(f"\nConfiguring device: {device_name}")
+
+            # Handle Ubuntu separately
+            if dev.os == 'linux' and dev.type == 'ubuntu':
+                print(f"[Ubuntu] Running local configuration for {device_name}")
+                try:
+                    ubuntu_config = UbuntuNetworkConfigurator(dev)
+                    ubuntu_config.configure()
+                except Exception as e:
+                    print(f"[Ubuntu] Error configuring {device_name}: {e}")
+                continue
 
             # 1) Telnet configuration (if connection exists)
             if 'telnet' in dev.connections:

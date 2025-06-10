@@ -10,22 +10,25 @@ devices:
       cli:
         protocol: ssh
         port: 22
-        ip: 192.168.102.2
+        ip: 192.168.101.2
         credentials:
           default:
             username: admin
             password: Cisco!23
 
-  IOSv15:
+  iosv:
     os: iosxe
     type: router
+    custom:
+      dhcp_pool_name: Pool1
+      dns_server: 192.168.11.254
     credentials:
       enable:
         password: Cisco!2345
     connections:
       cli:
         protocol: ssh
-        ip: 192.168.103.2
+        ip: 192.168.102.2
         port: 22
         credentials:
           default:
@@ -39,7 +42,7 @@ topology:
         alias: initial
         type: ethernet
         link: csr
-        ipv4: 192.168.102.2/24
+        ipv4: 192.168.101.2/24
       GigabitEthernet2:
         type: ethernet
         alias: to_DockerGuest1
@@ -51,13 +54,13 @@ topology:
         link: link-ftd3
         ipv4: 192.168.106.1/24
 
-  IOSv15:
+  iosv:
     interfaces:
       GigabitEthernet0/0:
         type: ethernet
         alias: initial
         link: link-ios15
-        ipv4: 192.168.103.2/24
+        ipv4: 192.168.102.2/24
       GigabitEthernet0/1:
         type: ethernet
         alias: to_FTD

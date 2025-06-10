@@ -2,11 +2,34 @@ testbed:
   name: my_topology
 
 devices:
+  ubuntu-host:
+    os: linux
+    type: ubuntu
+    connections: { }
+    custom:
+      network_config:
+        interface: ens4
+        ip: 192.168.11.21/24
+        gateway: 192.168.11.1
+        routes:
+          cloud: 192.168.12.0/24
+          CSR: 192.168.101.0/24
+          iosv: 192.168.102.0/24
+          ftd: 192.168.103.0/24
+          UbuntuDockerGuest-1: 192.168.105.0/24
+          RouterLink-1: 192.168.106.0/24
+          RouterLink-2: 192.168.107.0/24
+          DNS-1: 192.168.108.0/24
+          UbuntuDockerGuest-2: 192.168.109.0/24
+
   IOU1:
     os: ios
     type: router
     custom:
       hostname: em-r1
+      ip_helper:
+        next_hop: to_iosv
+        ip: 192.168.105.1
       static_routes:
         - { dest: 192.168.105.0, next_hop: 192.168.101.2 }
         - { dest: 192.168.106.0, next_hop: 192.168.101.2 }
@@ -30,8 +53,6 @@ devices:
         protocol: ssh
         ip: 192.168.11.1
         port: 22
-        arguments:
-          ssh_options: "-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=no"
       napalm:
         class: napalm
         protocol: napalm
@@ -75,8 +96,8 @@ devices:
           excluded: [ 192.168.109.0, 192.168.109.10 ]
     credentials:
       default:
-        username: user
-        password: pass
+        username: admin
+        password: Cisco!12
       enable:
         password: Cisco!12
     connections:
@@ -102,6 +123,9 @@ devices:
     platform: iosv
     custom:
       hostname: iosv
+      ip_helper:
+        next_hop: to_DNS
+        ip: 192.168.105.1
       gateway:
         dest: 192.168.11.0
         next_hop: 192.168.102.1
@@ -128,8 +152,6 @@ devices:
         protocol: ssh
         ip: 192.168.102.2
         port: 22
-        arguments:
-          ssh_options: "-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=no"
 
   FTD:
     os: ftd
@@ -179,6 +201,7 @@ topology:
         link: csr
         ipv4: 192.168.101.1/24
       Ethernet0/2:
+        alias: to_iosv
         type: ethernet
         link: link-ios15
         ipv4: 192.168.102.1/24

@@ -2,13 +2,24 @@
 telnetconnector2 file to manage telnet connections,
 depending on which device connects via telnet.
 """
-
-
+import logging
 import telnetlib
 from time import sleep
 from typing import Optional, Any, List
 from pyats.datastructures import AttrDict
 from pyats.topology import Device
+
+logger = logging.getLogger(__name__)
+
+# Disable propagation to prevent pyATS from double-logging
+logger.propagate = False
+
+# Configure only if no handlers exist (prevent duplicates)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('> %(message)s'))  # Simple arrow prefix
+    logger.addHandler(handler)
 
 class TelnetConnector2:
     """
@@ -50,6 +61,34 @@ class TelnetConnector2:
         if self._conn:
             self._conn.close()
 
+    def write(self, command: str) -> None:
+        """
+        Sends a command to the device.
+        """
+        self._conn.write(command.encode() + b'\n')
+
+    def read(self) -> str:
+        """
+        Performs a read_very_eager
+        Return:
+            The output of the read
+        """
+        return self._conn.read_very_eager().decode()
+
+    def try_skip_initial_config_dialog(self, last_out: str):
+        """
+        Checks if autoconfiguration is in progress and cancels if so
+            Args:
+                last_out(str): The last output on the console
+        """
+        self.write('')
+        if 'initial configuration dialog?' or '\'yes\' or \'no\'' in last_out:
+            self.execute('no', prompt=[r'terminate autoinstall\? \[yes\]:'])
+            self.write('yes')
+            sleep(20)
+            self.write('\r')
+            self.execute('', prompt=[r'\w+\>'])
+
     def execute(self, command: str, **kwargs: Any) -> str:
         """
         Execute a command over telnet and wait for prompt(s).
@@ -58,6 +97,7 @@ class TelnetConnector2:
             raise RuntimeError("Connection not established. Call connect() first.")
         prompt: List[bytes] = list(map(lambda _: _.encode(), kwargs.get('prompt', [])))
         self._conn.write(f'{command}\n'.encode())
+        logger.info(command)
         try:
             index, match, output = self._conn.expect(prompt, timeout=10)
             return output.decode(errors="ignore")
@@ -70,10 +110,13 @@ class TelnetConnector2:
         """
         Perform initial device configuration based on device OS.
         """
+        out = self.read()
+        self.try_skip_initial_config_dialog(out)
+
         if self.device.os == 'ios':
             self._initial_conf_ios()
         elif self.device.os == 'iosxe':
-            self._initial_conf_csr()
+            self._initial_conf_ios()  # was csr
         elif self.device.os == 'ftd':
             self._initial_conf_ftd()
 
@@ -81,16 +124,11 @@ class TelnetConnector2:
         """
         Initial configuration for IOS devices.
         """
-        # self.execute('', prompt=['Would you like to enter the
-        # initial configuration dialog? \\[yes/no\\]:'])
-        # self.execute('no', prompt=['Would you like to terminate autoinstall?
-        # \\[yes/no\\]:'])
-        # self.execute('yes', prompt=['\\(Config Wizard\\)'])
-
         self.execute("\n", prompt=r'>')
         self.execute("en", prompt=r'#')
         self.execute('conf t', prompt=[r'\(config.*\)#'])
 
+        #configure initial interface
         interface = self.device.interfaces['initial']
         self.execute(f"int {interface.name}", prompt=[r'\(config-if\)#'])
         ip = interface.ipv4.ip.compressed
@@ -99,6 +137,12 @@ class TelnetConnector2:
         self.execute('no shut', prompt=[r'\(config-if\)#'])
         self.execute('exit', prompt=[r'\(config\)#'])
 
+        if 'gateway' in self.device.custom:
+            self.execute(
+                f'ip route {self.device.custom.gateway["dest"]} {mask} {self.device.custom.gateway["next_hop"]}',
+                prompt=[r'\(config\)#'])
+
+        #configure ssh on device
         hostname = self.device.custom.hostname
         self.execute(f'hostname {hostname}', prompt=[r'\(config\)#'])
         self.execute('ip domain name localdomain', prompt=[r'\(config\)#'])
@@ -108,10 +152,8 @@ class TelnetConnector2:
         if 'replace them' in out:
             self.execute('yes', prompt=[r'\(config\)#'])
             sleep(5)
-
         username = self.device.credentials.default.username
         password = self.device.credentials.default.password.plaintext
-
         self.execute(f'username {username} privilege 15 secret {password}',
                      prompt=[r'\(config\)#'])
         self.execute('line vty 0 4', prompt=[r'\(config-line\)#'])
@@ -121,77 +163,74 @@ class TelnetConnector2:
         self.execute('ip ssh version 2', prompt=[r'\(config\)#'])
         self.execute('ip scp server enable', prompt=[r'\(config\)#'])
 
+        # configure an enable password for iosv device
         enable_password = getattr(self.device.credentials, "enable", None)
-
         if enable_password and self.device.platform == 'iosv':
             self.execute(f'enable secret {enable_password.password.plaintext}',
                          prompt=[r'\(config\)#'])
-            self.execute(
-                f'ip route {self.device.custom.gateway["dest"]} {mask} {self.device.custom.gateway["next_hop"]}',
-                prompt=[r'\(config\)#'])
 
         self.execute('end', prompt=[rf'{hostname}#'])
         self.execute('write memory', prompt=[rf'\[OK\]|{hostname}#'])
         self.execute('', prompt=[rf'{hostname}#'])
 
-    def _initial_conf_csr(self) -> None:
-        """
-        Initial configuration for IOS-XE (CSR) devices.
-        """
-        # self.execute('', prompt=['Would you like to enter the
-        # initial configuration dialog? \\[yes/no\\]:'])
-        # self.execute('no', prompt=['Would you like to
-        # terminate autoinstall? \\[yes/no\\]:'])
-        # self.execute('yes', prompt=['enabled by Smart Agent for Licensing.\\'])
-
-        self.execute("\n", prompt=r'>')
-        self.execute('enable', prompt=[r'#'])
-        self.execute('conf t', prompt=[r'\(config\)#'])
-
-        interface = self.device.interfaces['initial']
-        self.execute(f"int {interface.name}", prompt=[r'\(config-if\)#'])
-        ip = interface.ipv4.ip.compressed
-        mask = interface.ipv4.network.netmask.exploded
-        self.execute(f"ip add {ip} {mask}", prompt=[r'\(config-if\)#'])
-        self.execute('no shut', prompt=[r'\(config-if\)#'])
-        self.execute('exit', prompt=[r'\(config\)#'])
-        self.execute(f'ip route {self.device.custom.gateway["dest"]} {mask} {self.device.custom.gateway["next_hop"]}',
-                     prompt=[r'\(config\)#'])
-
-        hostname = self.device.custom.hostname
-        self.execute(f'hostname {hostname}', prompt=[r'\(config\)#'])
-        self.execute('ip domain name localdomain', prompt=[r'\(config\)#'])
-        out = self.execute('crypto key generate rsa modulus 2048',
-                           prompt=[r'\(config\)#', r'replace them\?'])
-        sleep(5)
-        if 'replace them' in out:
-            self.execute('yes', prompt=[r'\(config\)#'])
-            sleep(5)
-
-        username = self.device.credentials.default['username']
-        login_pass = self.device.credentials.default['password'].plaintext
-        self.execute(f'username {username} privilege 15 secret {login_pass}',
-                     prompt=[r'\(config\)#'])
-        self.execute('line vty 0 4', prompt=[r'\(config-line\)#'])
-        self.execute('transport input ssh', prompt=[r'\(config-line\)#'])
-        self.execute('login local', prompt=[r'\(config-line\)#'])
-        self.execute('exit', prompt=[r'\(config\)#'])
-        self.execute('ip ssh version 2', prompt=[r'\(config\)#'])
-        self.execute('ip scp server enable', prompt=[r'\(config\)#'])
-
-        if "dhcp" in self.device.custom:
-            for pool in self.device.custom["dhcp"]:
-                self.execute(f"ip dhcp excluded-address {pool['excluded'][0]} {pool['excluded'][1]}",
-                             prompt=[r'\(config\)#'])
-                pool_name = f"POOL_{pool['network'].replace('.', '_')}"
-                self.execute(f"ip dhcp pool {pool_name}", prompt=[r'\(dhcp-config\)#'])
-                self.execute(f"network {pool['network']} {pool['mask']}", prompt=[r'\(dhcp-config\)#'])
-                self.execute(f"default-router {pool['default_router']}", prompt=[r'\(dhcp-config\)#'])
-                self.execute(f"dns-server {pool['dns_server']}", prompt=[r'\(dhcp-config\)#'])
-
-        self.execute('end', prompt=[rf'{hostname}#'])
-        self.execute('write memory', prompt=[rf'\[OK\]|{hostname}#'])
-        self.execute('', prompt=[rf'{hostname}#'])
+    # def _initial_conf_csr(self) -> None:
+    #     """
+    #     Initial configuration for IOS-XE (CSR) devices.
+    #     """
+    #     # self.execute('', prompt=['Would you like to enter the
+    #     # initial configuration dialog? \\[yes/no\\]:'])
+    #     # self.execute('no', prompt=['Would you like to
+    #     # terminate autoinstall? \\[yes/no\\]:'])
+    #     # self.execute('yes', prompt=['enabled by Smart Agent for Licensing.\\'])
+    #
+    #     self.execute("\n", prompt=r'>')
+    #     self.execute('enable', prompt=[r'#'])
+    #     self.execute('conf t', prompt=[r'\(config\)#'])
+    #
+    #     interface = self.device.interfaces['initial']
+    #     self.execute(f"int {interface.name}", prompt=[r'\(config-if\)#'])
+    #     ip = interface.ipv4.ip.compressed
+    #     mask = interface.ipv4.network.netmask.exploded
+    #     self.execute(f"ip add {ip} {mask}", prompt=[r'\(config-if\)#'])
+    #     self.execute('no shut', prompt=[r'\(config-if\)#'])
+    #     self.execute('exit', prompt=[r'\(config\)#'])
+    #     self.execute(f'ip route {self.device.custom.gateway["dest"]} {mask} {self.device.custom.gateway["next_hop"]}',
+    #                  prompt=[r'\(config\)#'])
+    #
+    #     hostname = self.device.custom.hostname
+    #     self.execute(f'hostname {hostname}', prompt=[r'\(config\)#'])
+    #     self.execute('ip domain name localdomain', prompt=[r'\(config\)#'])
+    #     out = self.execute('crypto key generate rsa modulus 2048',
+    #                        prompt=[r'\(config\)#', r'replace them\?'])
+    #     sleep(5)
+    #     if 'replace them' in out:
+    #         self.execute('yes', prompt=[r'\(config\)#'])
+    #         sleep(5)
+    #
+    #     username = self.device.credentials.default['username']
+    #     login_pass = self.device.credentials.default['password'].plaintext
+    #     self.execute(f'username {username} privilege 15 secret {login_pass}',
+    #                  prompt=[r'\(config\)#'])
+    #     self.execute('line vty 0 4', prompt=[r'\(config-line\)#'])
+    #     self.execute('transport input ssh', prompt=[r'\(config-line\)#'])
+    #     self.execute('login local', prompt=[r'\(config-line\)#'])
+    #     self.execute('exit', prompt=[r'\(config\)#'])
+    #     self.execute('ip ssh version 2', prompt=[r'\(config\)#'])
+    #     self.execute('ip scp server enable', prompt=[r'\(config\)#'])
+    #
+    #     if "dhcp" in self.device.custom:
+    #         for pool in self.device.custom["dhcp"]:
+    #             self.execute(f"ip dhcp excluded-address {pool['excluded'][0]} {pool['excluded'][1]}",
+    #                          prompt=[r'\(config\)#'])
+    #             pool_name = f"POOL_{pool['network'].replace('.', '_')}"
+    #             self.execute(f"ip dhcp pool {pool_name}", prompt=[r'\(dhcp-config\)#'])
+    #             self.execute(f"network {pool['network']} {pool['mask']}", prompt=[r'\(dhcp-config\)#'])
+    #             self.execute(f"default-router {pool['default_router']}", prompt=[r'\(dhcp-config\)#'])
+    #             self.execute(f"dns-server {pool['dns_server']}", prompt=[r'\(dhcp-config\)#'])
+    #
+    #     self.execute('end', prompt=[rf'{hostname}#'])
+    #     self.execute('write memory', prompt=[rf'\[OK\]|{hostname}#'])
+    #     self.execute('', prompt=[rf'{hostname}#'])
 
     def _initial_conf_ftd(self) -> None:
         """

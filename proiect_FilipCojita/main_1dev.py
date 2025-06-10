@@ -12,7 +12,7 @@ from ssh_connector_paramiko import SSHConnectorParamiko
 tb = loader.load('mytopo.yaml')
 
 # Specify the device name here
-DEVICE_NAME = 'IOU1'  # Change this as needed
+DEVICE_NAME = 'IOSv'  # Change this as needed
 
 
 class OneDeviceTelnetSSHTest(aetest.Testcase):
@@ -52,6 +52,7 @@ class OneDeviceTelnetSSHTest(aetest.Testcase):
             ssh.connect()
             ssh.configure_interfaces()
             ssh.configure_static_routes()
+            ssh.configure_dhcp()
             print(f"[SSH] Configuration complete for {DEVICE_NAME}")
         except Exception as e:
             print(f"[SSH] Error configuring {DEVICE_NAME}: {e}")

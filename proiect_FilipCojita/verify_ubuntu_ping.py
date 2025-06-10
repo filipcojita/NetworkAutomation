@@ -73,6 +73,7 @@ def main() -> None:
         '192.168.105.11', # Ubuntudockerguest-1
         '192.168.108.11', # DNS Server
         '192.168.109.11',  # Ubuntudockerguest-2
+        '192.168.103.3'   #UbuntuDesktopGuest
     ]
 
     tester = UbuntuPingTester(endpoints_list)
