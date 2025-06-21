@@ -44,14 +44,14 @@ class SwaggerConnector:
         self.client = swagger_client
 
     def __login(self, username: Optional[str] = None, password: Optional[str] = None):
-        endspoint = '/api/fdm/latest/fdm/token'
+        endpoint = '/api/fdm/latest/fdm/token'
         response = requests.post(
-            self._url + endspoint,
+            self._url + endpoint,
             verify=False,
             data=json.dumps({'username': username, 'password': password, 'grant_type': 'password'}),
             headers=self._headers
         )
-        print("Login response:", response.text)  # <--- aici
+        print("Login response:", response.text)
         self.access_token = response.json()['access_token']
         self.token_type = response.json()['token_type']
         self.refresh_token = response.json()['refresh_token']
