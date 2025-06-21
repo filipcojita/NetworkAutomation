@@ -11,7 +11,7 @@ X  - (1p) IOU/CSR/IOSv/FTD Static route configuration (use different connectors/
 X - (1p) Ubuntu server can ping all endpoints - verification part of pyATS test
 
 Extra points:
- - (2P) OSPF configured on 2 devices - functional 
+X - (2P) OSPF configured on 2 devices - functional 
  - (2p) Executing any device configuration in parallel 
 
 X == completed
