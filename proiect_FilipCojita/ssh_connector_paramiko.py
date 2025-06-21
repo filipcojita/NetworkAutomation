@@ -11,6 +11,7 @@ from typing import Optional, List, Union
 import paramiko
 from pyats.datastructures import AttrDict
 from pyats.topology import Device
+import ipaddress
 
 logger = logging.getLogger(__name__)
 
@@ -179,35 +180,49 @@ class SSHConnectorParamiko:
         except Exception as e:
             raise RuntimeError(f"Error executing command '{command}': {e}")
 
+    def configure_routing(self) -> None:
+        self.execute('configure terminal', prompt=r'\(config\)#')
+
+        if hasattr(self.device.custom, 'static_routes') and self.device.custom.static_routes:
+            for route in self.device.custom.static_routes:
+                dest = route['dest']
+                mask = route['mask']
+                next_hop = route['next_hop']
+                self.execute(f"ip route {dest} {mask} {next_hop}", prompt=r'\(config\)#')
+            self.execute('end', prompt=r'#')
+        else:
+            area = getattr(self.device.custom, 'ospf_area', 0)
+            self.execute(f'router ospf 1', prompt=r'\(config-router\)#')
+
+            for iface in self.device.interfaces.values():
+                network = iface.ipv4.network.network_address
+                netmask = iface.ipv4.network.netmask
+                wildcard = ipaddress.IPv4Address((2 ** 32 - 1) - int(netmask))
+
+                self.execute(f'network {network} {wildcard} area {area}', prompt=r'\(config-router\)#')
+
+            self.execute('end', prompt=r'#')
+
     def configure_interfaces(self) -> None:
         """
         Configure interfaces on the device based on the device's interface attributes.
+        This function assumes each interface has 'name' and IPv4 info.
 
-        This example assumes each interface has 'name' and IPv4 info.
+        If ip_helper section is found in custom section from testbed, then it will be added
+        according to the provided parameters.
         """
         self.execute('configure terminal', prompt=r'\(config\)#')
         for iface in self.device.interfaces.values():
+            if getattr(iface, 'alias', None) == 'initial':
+                continue
             self.execute(f"interface {iface.name}", prompt=r'\(config-if\)#')
             ip = iface.ipv4.ip.compressed
             mask = iface.ipv4.network.netmask.exploded
             self.execute(f"ip address {ip} {mask}", prompt=r'\(config-if\)#')
             self.execute('no shutdown', prompt=r'\(config-if\)#')
             self.execute('exit', prompt=r'\(config\)#')
-        self.execute('end', prompt=r'#')
 
-    def configure_static_routes(self) -> None:
-        """
-        Configure static routes on the device using custom attributes.
-
-        Also configures ip-helper-address based on hostname in device.custom.hostname.
-        """
-        self.execute('configure terminal', prompt=r'\(config\)#')
-        for route in getattr(self.device.custom, 'static_routes', []):
-            dest = route['dest']
-            mask = '255.255.255.0'  # Adjust mask logic if needed
-            next_hop = route['next_hop']
-            self.execute(f"ip route {dest} {mask} {next_hop}", prompt=r'\(config\)#')
-
+        # ip-helper condition
         if 'ip_helper' in self.device.custom:
             for iface_name, iface in self.device.interfaces.items():
                 # Check if the interface's alias matches the next_hop
@@ -217,9 +232,12 @@ class SSHConnectorParamiko:
                                  prompt=r'\(config-if\)#')
                     self.execute('exit', prompt=r'\(config\)#')
 
+        self.execute('end', prompt=r'#')
+
     def configure_dhcp(self) -> None:
-        # configure dhcp for csr device
+        # configure dhcp for csr device (or for any devices that specify dhcp in testbed)
         if "dhcp" in self.device.custom:
+            self.execute("configure terminal", prompt=r'\(config\)#')
             for pool in self.device.custom["dhcp"]:
                 self.execute(f"ip dhcp excluded-address {pool['excluded'][0]} {pool['excluded'][1]}",
                              prompt=[r'\(config\)#'])
@@ -228,3 +246,4 @@ class SSHConnectorParamiko:
                 self.execute(f"network {pool['network']} {pool['mask']}", prompt=[r'\(dhcp-config\)#'])
                 self.execute(f"default-router {pool['default_router']}", prompt=[r'\(dhcp-config\)#'])
                 self.execute(f"dns-server {pool['dns_server']}", prompt=[r'\(dhcp-config\)#'])
+            self.execute("exit", prompt=r'#')
