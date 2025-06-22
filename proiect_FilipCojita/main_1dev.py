@@ -14,7 +14,7 @@ from ssh_connector_paramiko import SSHConnectorParamiko
 tb = loader.load('mytopo.yaml')
 
 # Specify the device name here
-DEVICE_NAME = 'ubuntu-host'  # Change this as needed
+DEVICE_NAME = 'IOSv4'  # Change this as needed
 
 
 class OneDeviceTelnetSSHTest(aetest.Testcase):
@@ -33,22 +33,22 @@ class OneDeviceTelnetSSHTest(aetest.Testcase):
             except Exception as e:
                 print(f"[Ubuntu] Error configuring {dev}: {e}")
 
-        if 'telnet' in dev.connections:
-            print(f"[Telnet] Connecting to {dev}")
-            conn = dev.connections.telnet
-            telnet_connector = TelnetConnector2(dev)
-            try:
-                telnet_connector.connect(connection=conn)
-                telnet_connector.do_initial_configuration()
-                print(f"[Telnet] Configuration complete for {dev}")
-            except Exception as e:
-                print(f"[Telnet] Error configuring {dev}: {e}")
-            finally:
-                try:
-                    telnet_connector.disconnect()
-                except Exception:
-                    pass
-                print(f"[Telnet] Disconnected from {dev}")
+        # if 'telnet' in dev.connections:
+        #     print(f"[Telnet] Connecting to {dev}")
+        #     conn = dev.connections.telnet
+        #     telnet_connector = TelnetConnector2(dev)
+        #     try:
+        #         telnet_connector.connect(connection=conn)
+        #         telnet_connector.do_initial_configuration()
+        #         print(f"[Telnet] Configuration complete for {dev}")
+        #     except Exception as e:
+        #         print(f"[Telnet] Error configuring {dev}: {e}")
+        #     finally:
+        #         try:
+        #             telnet_connector.disconnect()
+        #         except Exception:
+        #             pass
+        #         print(f"[Telnet] Disconnected from {dev}")
 
     @aetest.test
     def ssh_configure(self):

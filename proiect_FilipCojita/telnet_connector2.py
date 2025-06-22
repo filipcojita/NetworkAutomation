@@ -8,6 +8,7 @@ from time import sleep
 from typing import Optional, Any, List
 from pyats.datastructures import AttrDict
 from pyats.topology import Device
+from unicon.plugins.asa.statements import enable_password
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,7 @@ class TelnetConnector2:
             sleep(5)
         username = self.device.credentials.default.username
         password = self.device.credentials.default.password.plaintext
+        enable_password = self.device.credentials.enable.password.plaintext
         self.execute(f'username {username} privilege 15 secret {password}',
                      prompt=[r'\(config\)#'])
         self.execute('line vty 0 4', prompt=[r'\(config-line\)#'])
@@ -190,13 +192,7 @@ class TelnetConnector2:
         self.execute('exit', prompt=[r'\(config\)#'])
         self.execute('ip ssh version 2', prompt=[r'\(config\)#'])
         self.execute('ip scp server enable', prompt=[r'\(config\)#'])
-
-        # configure an enable password for iosv device
-        enable_password = getattr(self.device.credentials, "enable", None)
-        if enable_password:
-            password = enable_password.get("password")
-            self.execute(f'enable secret {password}', prompt=[r'\(config\)#'])
-
+        self.execute(f'enable secret {enable_password}', prompt=[r'\(config\)#'])
         self.execute('end', prompt=[rf'{hostname}#'])
         self.execute('write memory', prompt=[rf'\[OK\]|{hostname}#'])
         self.execute('', prompt=[rf'{hostname}#'])

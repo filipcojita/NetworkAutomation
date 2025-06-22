@@ -25,8 +25,8 @@ class AllDevicesTelnetSSHTest(aetest.Testcase):
             if dev.os == 'linux' and dev.type == 'ubuntu':
                 print(f"[Ubuntu] Running local configuration for {device_name}")
                 try:
-                    ubuntu_config = UbuntuNetworkConfigurator(dev)
-                    ubuntu_config.configure()
+                    ubuntu = UbuntuNetworkConfigurator(dev, testbed_path="mytopo.yaml")
+                    ubuntu.configure()
                 except Exception as e:
                     print(f"[Ubuntu] Error configuring {device_name}: {e}")
                 continue
@@ -50,7 +50,6 @@ class AllDevicesTelnetSSHTest(aetest.Testcase):
             # 2) SSH configuration (only if ssh connection exists AND device is NOT FTD)
             if 'ssh' in dev.connections:
                 # Check if device is FTD — skip SSH for FTD devices
-                # You can identify FTD device by name or any property (adjust as needed)
                 if 'ftd' in device_name.lower():
                     print(f"[SSH] Skipping SSH configuration for FTD device {device_name}")
                     continue

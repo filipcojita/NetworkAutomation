@@ -50,6 +50,7 @@ class AutoFillDevicesTest(aetest.Testcase):
 
             # SSH configuration (skip FTD)
             if 'ssh' in dev.connections and dev.os != 'ftd':
+                time.sleep(3)
                 print(f"[SSH] Connecting to {device_name}")
                 ssh = SSHConnectorParamiko(dev)
                 try:

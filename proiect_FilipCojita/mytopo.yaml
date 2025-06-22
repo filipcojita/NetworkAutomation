@@ -11,16 +11,6 @@ devices:
         interface: ens4
         ip: 192.168.11.21/24
         gateway: 192.168.11.1
-        routes:
-          cloud: 192.168.12.0/24
-          CSR: 192.168.101.0/24
-          iosv: 192.168.102.0/24
-          ftd: 192.168.103.0/24
-          UbuntuDockerGuest-1: 192.168.105.0/24
-          RouterLink-1: 192.168.106.0/24
-          RouterLink-2: 192.168.107.0/24
-          DNS-1: 192.168.108.0/24
-          UbuntuDockerGuest-2: 192.168.109.0/24
 
   IOU1:
     os: ios
@@ -30,13 +20,7 @@ devices:
       ip_helper:
         next_hop: to_iosv
         ip: 192.168.105.1
-      static_routes:
-        - { dest: 192.168.105.0, next_hop: 192.168.101.2 }
-        - { dest: 192.168.106.0, next_hop: 192.168.101.2 }
-        - { dest: 192.168.107.0, next_hop: 192.168.102.2 }
-        - { dest: 192.168.108.0, next_hop: 192.168.102.2 }
-        - { dest: 192.168.109.0, next_hop: 192.168.103.2 }
-    credentials:
+      credentials:
       default:
         username: admin
         password: Cisco!23
@@ -70,14 +54,9 @@ devices:
     custom:
       gateway:
         dest: 192.168.11.0
+        mask: 255.255.255.0
         next_hop: 192.168.101.1
       hostname: em-r2
-      static_routes:
-        - { dest: 192.168.102.0, next_hop: 192.168.101.1 }
-        - { dest: 192.168.103.0, next_hop: 192.168.101.1 }
-        - { dest: 192.168.107.0, next_hop: 192.168.106.2 }
-        - { dest: 192.168.108.0, next_hop: 192.168.101.1 }
-        - { dest: 192.168.109.0, next_hop: 192.168.106.2 }
       dhcp:
         - network: 192.168.105.0
           mask: 255.255.255.0
@@ -105,7 +84,7 @@ devices:
         class: telnet_connector2.TelnetConnector2
         protocol: telnet
         ip: '192.168.0.100'
-        port: 5087
+        port: 5002
       ssh:
         class: ssh_connector_paramiko.SSHConnectorParamiko
         protocol: ssh
@@ -128,14 +107,9 @@ devices:
         ip: 192.168.105.1
       gateway:
         dest: 192.168.11.0
+        mask: 255.255.255.0
         next_hop: 192.168.102.1
-      static_routes:
-        - { dest: 192.168.101.0, next_hop: 192.168.102.1 }
-        - { dest: 192.168.103.0, next_hop: 192.168.102.1 }
-        - { dest: 192.168.105.0, next_hop: 192.168.102.1 }
-        - { dest: 192.168.106.0, next_hop: 192.168.102.1 }
-        - { dest: 192.168.109.0, next_hop: 192.168.107.2 }
-    credentials:
+      credentials:
       default:
         username: admin
         password: Cisco!23
@@ -164,7 +138,7 @@ devices:
         class: telnet_connector2.TelnetConnector2
         protocol: telnet
         ip: 192.168.0.100
-        port: 5021
+        port: 5018
         credentials:
           login:
             username: admin
@@ -178,15 +152,59 @@ devices:
           login:
             username: admin
             password: Cisco@135
-      rest: ###
+      rest:
         protocol: https
-        class: swagger_connector.SwaggerConnector #
-        ip: 192.168.103.2 #103.2
+        class: swagger_connector.SwaggerConnector
+        ip: 192.168.103.2
         port: 443
         credentials:
           login:
             username: admin
-            password: Cisco@135 #pass for admin connection
+            password: Cisco@135
+
+  # dev with min config + DHCP
+  IOU2:
+    os: ios
+    type: router
+    custom:
+      dhcp:
+        - network: 192.168.117.0
+          mask: 255.255.255.0
+          default_router: 192.168.117.1
+          dns_server: 8.8.8.8
+          excluded: [ 192.168.117.0, 192.168.117.10 ]
+    connections:
+      telnet:
+        port: 5006
+
+  # dev with min config + enable password
+  IOSv2:
+    os: ios
+    type: router
+    connections:
+      telnet:
+        port: 5008
+    credentials:
+      enable:
+        password: iosvpa55
+
+  # dev with min config + hostname
+  IOSv3:
+    os: ios
+    type: router
+    custom:
+      hostname: iosV3_router
+    connections:
+      telnet:
+        port: 5010
+
+  # device with MINIMAL CONFIGURATIONS
+  IOSv4:
+    os: ios
+    type: router
+    connections:
+      telnet:
+        port: 5017
 
 topology:
   IOU1:
@@ -210,9 +228,9 @@ topology:
         link: ftd_mgmt
         ipv4: 192.168.103.1/24
       Ethernet1/0:
-        alias: future_conn
+        alias: to_iosv3
         type: ethernet
-        link: future_dev
+        link: link-iosv3
         ipv4: 192.168.104.1/24
 
   CSR:
@@ -232,6 +250,11 @@ topology:
         alias: to_FTD
         link: link-ftd3
         ipv4: 192.168.106.1/24
+      GigabitEthernet4:
+        type: ethernet
+        alias: to_IOSv2
+        link: link-iosv2
+        ipv4: 192.168.115.1/24
 
   IOSv:
     interfaces:
@@ -250,6 +273,29 @@ topology:
         alias: to_DNS
         link: link-dns
         ipv4: 192.168.108.1/24
+      GigabitEthernet0/3:
+        type: ethernet
+        alias: to_IOU2
+        link: link-iou2
+        ipv4: 192.168.120.2/24
+
+  IOU2:
+    interfaces:
+      Ethernet0/0:
+        type: ethernet
+        alias: initial
+        link: link-iou2
+        ipv4: 192.168.120.1/24
+      Ethernet0/1:
+        type: ethernet
+        alias: to_FTD
+        link: link-ftd4
+        ipv4: 192.168.121.1/24
+      Ethernet0/2:
+        type: ethernet
+        alias: to_iosv4
+        link: link-iosv4
+        ipv4: 192.168.117.1/24
 
   FTD:
     interfaces:
@@ -258,24 +304,53 @@ topology:
         alias: mgmt
         link: ftd_mgmt
         ipv4: 192.168.103.2/24
-      Management0/0:
-        type: ethernet
-        alias: diagnostic
-        link: ftd_mgmt
-        ipv4: 192.168.111.2/24
+#      Management0/0:
+#        type: ethernet
+#        alias: diagnostic
+#        link: ftd_mgmt
+#        ipv4: 192.168.111.2/24
 
       GigabitEthernet0/0:
-        type: ethernet
-        alias: to_iosv15
-        link: link-ftd2
-        ipv4: 192.168.107.2/24
-      GigabitEthernet0/1:
-        type: ethernet
-        alias: to_dockerguest2
-        link: link-docker2
-        ipv4: 192.168.109.1/24
-      GigabitEthernet0/2:
         type: ethernet
         alias: to_csr
         link: link-ftd3
         ipv4: 192.168.106.2/24
+      GigabitEthernet0/1:
+        type: ethernet
+        alias: to_iosv15
+        link: link-ftd2
+        ipv4: 192.168.107.2/24
+      GigabitEthernet0/2:
+        type: ethernet
+        alias: to_dockerguest2
+        link: link-docker2
+        ipv4: 192.168.109.1/24
+      GigabitEthernet0/3:
+        type: ethernet
+        alias: to_iou2
+        link: link-ftd4
+        ipv4: 192.168.121.2/24
+
+  IOSv2:
+    interfaces:
+      GigabitEthernet0/0:
+        type: ethernet
+        alias: initial
+        link: link-iosv2
+        ipv4: 192.168.115.2/24
+
+  IOSv3:
+    interfaces:
+      GigabitEthernet0/0:
+        type: ethernet
+        alias: initial
+        link: link-iosv3
+        ipv4: 192.168.104.2/24
+
+  IOSv4:
+    interfaces:
+      GigabitEthernet0/0:
+        type: ethernet
+        alias: initial
+        link: link-iosv4
+        ipv4: 192.168.117.2/24

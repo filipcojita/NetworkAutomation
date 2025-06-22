@@ -7,6 +7,7 @@ to be done via ssh
 import re
 import time
 import logging
+from time import sleep
 from typing import Optional, List, Union
 import paramiko
 from pyats.datastructures import AttrDict
@@ -101,8 +102,8 @@ class SSHConnectorParamiko:
 
     def disconnect(self) -> None:
         """Close the SSH shell and client connections."""
-        self.execute('end', prompt=r'#')
         self.execute('write', prompt=r'#')
+        sleep(3)
 
         if self.shell:
             self.shell.close()

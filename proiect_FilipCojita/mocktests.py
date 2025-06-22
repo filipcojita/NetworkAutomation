@@ -1,5 +1,5 @@
 """
-5 tests for the network automation project
+5 tests using unittest library and MagicMock for the network automation project
 """
 
 import subprocess
@@ -12,97 +12,112 @@ from ubuntu_setup import UbuntuNetworkConfigurator
 from ssh_connector_paramiko import SSHConnectorParamiko
 from telnet_connector2 import TelnetConnector2
 
-
-class TestUbuntuSetup(unittest.TestCase):
-    """Unit tests for UbuntuNetworkConfigurator."""
+class TestUbuntuNetworkConfigurator(unittest.TestCase):
+    """
+    Unit tests for the UbuntuNetworkConfigurator class.
+    These tests check that Ubuntu devices are configured correctly using subprocess commands.
+    """
 
     @patch('ubuntu_setup.subprocess.run')
-    def test_configure_runs_expected_commands(self, mock_run):
-        """Test if configure() runs the expected network commands."""
+    def test_configure_applies_network_commands(self, mock_run):
+        """
+        Test that configure() method applies expected network commands:
+        - Adds IP address to the interface.
+        - Brings interface up.
+        - Adds routes via specified gateway.
+        """
         mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = "Success"
-        mock_run.return_value.stderr = ""
+        mock_run.return_value.stdout = ''
+        mock_run.return_value.stderr = ''
 
-        configurator = UbuntuNetworkConfigurator(
-            interface='ens4',
-            ip='192.168.11.21/24',
-            gateway='192.168.11.1'
-        )
+        dev = Device(name="UbuntuHost")
+        dev.custom = AttrDict({
+            'network_config': {
+                'interface': 'eth0',
+                'ip': '192.168.10.10/24',
+                'gateway': '192.168.10.1',
+                'routes': {
+                    'r1': '192.168.20.0/24',
+                    'r2': '192.168.30.0/24'
+                }
+            }
+        })
+
+        configurator = UbuntuNetworkConfigurator(dev)
         configurator.configure()
 
+        # Expected subprocess calls
         expected_calls = [
-            call(['sudo', 'ip', 'address', 'add', '192.168.11.21/24', 'dev', 'ens4'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'link', 'set', 'ens4', 'up'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.12.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.101.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.102.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.103.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.105.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.106.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.107.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.108.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
-            call(['sudo', 'ip', 'route', 'add', '192.168.109.0/24', 'via', '192.168.11.1'],
-                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True),
+            (['sudo', 'ip', 'address', 'add', '192.168.10.10/24', 'dev', 'eth0']),
+            (['sudo', 'ip', 'link', 'set', 'eth0', 'up']),
+            (['sudo', 'ip', 'route', 'add', '192.168.20.0/24', 'via', '192.168.10.1']),
+            (['sudo', 'ip', 'route', 'add', '192.168.30.0/24', 'via', '192.168.10.1']),
         ]
 
-        self.assertEqual(mock_run.call_count, len(expected_calls))
-        mock_run.assert_has_calls(expected_calls, any_order=False)
+        # Assert that subprocess.run was called with expected arguments
+        for call_args in expected_calls:
+            mock_run.assert_any_call(call_args, stdout=unittest.mock.ANY, stderr=unittest.mock.ANY, text=True)
 
     @patch('ubuntu_setup.subprocess.run')
-    def test_run_command_handles_failure(self, mock_run):
-        """Test run_command() prints error message on failure."""
+    def test_run_command_logs_error_on_failure(self, mock_run):
+        """
+        Test that run_command() logs an error if a subprocess call fails.
+        """
         mock_run.return_value.returncode = 1
-        mock_run.return_value.stdout = ""
-        mock_run.return_value.stderr = "Command failed"
+        mock_run.return_value.stderr = 'some error occurred'
 
-        configurator = UbuntuNetworkConfigurator()
-        with patch('builtins.print') as mock_print:
+        # Create an uninitialized configurator for isolated method testing
+        configurator = UbuntuNetworkConfigurator.__new__(UbuntuNetworkConfigurator)
+
+        with patch('ubuntu_setup.logger') as mock_logger:
             configurator.run_command(['fake', 'cmd'])
 
-        mock_print.assert_any_call("Error: Command failed")
+            # Ensure the error message is logged
+            mock_logger.error.assert_called_with("Error: some error occurred")
 
-    @patch('ubuntu_setup.subprocess.run')
-    def test_configure_with_custom_interface_and_ip(self, mock_run):
-        """Test configure() with custom interface and IP address."""
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = ""
-        mock_run.return_value.stderr = ""
+    def test_init_raises_if_missing_config(self):
+        """
+        Test that __init__ raises ValueError when required network configuration is missing.
+        Required keys: interface, ip, gateway.
+        """
+        dev = Device(name="BrokenUbuntu")
+        dev.custom = AttrDict({
+            'network_config': {
+                'ip': '192.168.10.10/24',  # missing 'interface' and 'gateway'
+            }
+        })
 
-        configurator = UbuntuNetworkConfigurator(
-            interface='eth0', ip='10.0.0.5/24', gateway='10.0.0.1'
-        )
-        configurator.configure()
+        # Expect a ValueError due to incomplete config
+        with self.assertRaises(ValueError) as context:
+            UbuntuNetworkConfigurator(dev)
 
-        mock_run.assert_any_call(
-            ['sudo', 'ip', 'address', 'add', '10.0.0.5/24', 'dev', 'eth0'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-        mock_run.assert_any_call(
-            ['sudo', 'ip', 'link', 'set', 'eth0', 'up'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-
+        self.assertIn("Missing required config values", str(context.exception))
 
 class TestSSHConnectorParamiko(unittest.TestCase):
-    """Unit tests for SSHConnectorParamiko class."""
+    """
+    Unit tests for the SSHConnectorParamiko class.
+
+    This test suite verifies that:
+    - SSH connections are correctly established using Paramiko.
+    - Shell commands are properly sent.
+    - Prompt output is correctly received.
+    """
 
     @patch('ssh_connector_paramiko.paramiko.SSHClient')
     def test_ssh_connect_and_execute(self, mock_ssh_client):
-        """Test SSH connection and command execution via Paramiko."""
+        """
+        Simulate an SSH connection and test command execution.
+
+        Verifies that:
+        - The `send()` method is called with the expected command.
+        - The output from the simulated shell includes the expected prompt.
+        """
+        # Create mock SSH client and shell
         mock_client = mock_ssh_client.return_value
         mock_shell = MagicMock()
         mock_client.invoke_shell.return_value = mock_shell
 
+        # Simulate `recv_ready()` returning True once
         def side_effect_recv_ready():
             side_effect_recv_ready.calls += 1
             return side_effect_recv_ready.calls == 1
@@ -111,29 +126,49 @@ class TestSSHConnectorParamiko(unittest.TestCase):
         mock_shell.recv_ready.side_effect = side_effect_recv_ready
         mock_shell.recv.return_value = b'test prompt#'
 
+        # Define a mock device with minimal connection data
         device = Device(
             name='test-device',
             connections={'ssh': {'ip': '192.0.2.1'}},
             credentials={'default': {'username': 'user', 'password': 'pass'}}
         )
 
+        # Manually inject mocked client and shell into the connector
         connector = SSHConnectorParamiko(device)
         connector.client = mock_client
         connector.shell = mock_shell
         connector._connected = True
 
+        # Run command and assert expected output
         output = connector.execute('show version', prompt='#')
-
         self.assertIn('test prompt#', output)
+
+        # Ensure command was sent
         mock_shell.send.assert_called_with(b'show version\n')
 
 
 class TestTelnetConnector2(unittest.TestCase):
-    """Unit tests for TelnetConnector2 class."""
+    """
+    Unit tests for the TelnetConnector2 class.
+
+    This test suite validates:
+    - Telnet connection setup using mocked IP and port.
+    - Proper command execution and output reading.
+    - Connection status checking and graceful disconnection.
+    """
 
     @patch('telnet_connector2.telnetlib.Telnet')
     def test_telnet_connect_and_execute(self, mock_telnet):
-        """Test Telnet connection and command execution."""
+        """
+        Simulate a Telnet connection and test command execution.
+
+        Verifies that:
+        - The Telnet session is initialized with the right host and port.
+        - Commands are written to the session.
+        - The session correctly receives and decodes expected output.
+        - Connection status and disconnect behavior work as expected.
+        """
+        # Create a fake pyATS Device with connection details
         device = Device(
             name='test-device',
             connections=AttrDict({
@@ -152,24 +187,25 @@ class TestTelnetConnector2(unittest.TestCase):
 
         connector = TelnetConnector2(device)
 
+        # Mock the Telnet connection object
         mock_conn_instance = MagicMock()
         mock_telnet.return_value = mock_conn_instance
 
+        # Connect using mock connection
         connector.connect(connection=device.connections.telnet)
-
         mock_telnet.assert_called_once_with(host='192.0.2.2', port=23, timeout=10)
 
+        # Simulate command execution
         mock_conn_instance.expect.return_value = (0, None, b"output text")
-
         output = connector.execute('show version', prompt=[r'#'])
-
         mock_conn_instance.write.assert_called_once_with(b'show version\n')
-
         self.assertEqual(output, "output text")
 
+        # Test is_connected logic
         mock_conn_instance.eof = False
         self.assertTrue(connector.is_connected())
 
+        # Disconnect and ensure the connection is closed
         connector.disconnect()
         mock_conn_instance.close.assert_called_once()
 
