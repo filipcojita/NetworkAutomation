@@ -30,23 +30,23 @@ class AutoFillDevicesTest(aetest.Testcase):
                     print(f"[Ubuntu] Error configuring {device_name}: {e}")
                 continue
 
-            # # Telnet configuration
-            # if 'telnet' in dev.connections:
-            #     print(f"[Telnet] Connecting to {device_name}")
-            #     conn = dev.connections.telnet
-            #     telnet_connector = TelnetConnector2(dev)
-            #     try:
-            #         telnet_connector.connect(connection=conn)
-            #         telnet_connector.do_initial_configuration()
-            #         print(f"[Telnet] Configuration complete for {device_name}")
-            #     except Exception as e:
-            #         print(f"[Telnet] Error configuring {device_name}: {e}")
-            #     finally:
-            #         try:
-            #             telnet_connector.disconnect()
-            #         except Exception:
-            #             pass
-            #         print(f"[Telnet] Disconnected from {device_name}")
+            # Telnet configuration
+            if 'telnet' in dev.connections:
+                print(f"[Telnet] Connecting to {device_name}")
+                conn = dev.connections.telnet
+                telnet_connector = TelnetConnector2(dev)
+                try:
+                    telnet_connector.connect(connection=conn)
+                    telnet_connector.do_initial_configuration()
+                    print(f"[Telnet] Configuration complete for {device_name}")
+                except Exception as e:
+                    print(f"[Telnet] Error configuring {device_name}: {e}")
+                finally:
+                    try:
+                        telnet_connector.disconnect()
+                    except Exception:
+                        pass
+                    print(f"[Telnet] Disconnected from {device_name}")
 
             # SSH configuration (skip FTD)
             if 'ssh' in dev.connections and dev.os != 'ftd':
