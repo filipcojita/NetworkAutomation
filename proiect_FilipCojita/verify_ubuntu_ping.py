@@ -79,6 +79,14 @@ def extract_ips_from_testbed(testbed_path: str) -> List[str]:
             if hasattr(interface, 'ipv4') and interface.ipv4:
                 ip_only = str(interface.ipv4.ip)
                 ips.append(ip_only)
+
+        dhcp_list = getattr(device.custom, "dhcp_assigned", [])
+        if isinstance(dhcp_list, str):
+            ips.append(dhcp_list)
+        elif isinstance(dhcp_list, list):
+            for ip in dhcp_list:
+                ips.append(str(ip))
+
     return ips
 
 

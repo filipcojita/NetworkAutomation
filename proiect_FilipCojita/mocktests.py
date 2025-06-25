@@ -22,19 +22,21 @@ from telnet_connector2 import TelnetConnector2
 
 class TestUbuntuConfiguratorRouteDuplication(unittest.TestCase):
     """
-    Test that UbuntuNetworkConfigurator.configure() avoids re-adding routes
-    that already exist on the system.
+    Verifies that UbuntuNetworkConfigurator does not re-add static routes
+    that already exist in the system.
     """
 
     @patch('ubuntu_setup.subprocess.run')
     def test_skips_duplicate_routes(self, mock_run):
         """
-        Simulate detection of an existing route and ensure that
-        'ip route add' is NOT called for it.
+        Mocks subprocess.run() to simulate a route that already exists.
+        Ensures 'ip route add' is not executed again.
         """
+        # simulate command output that indicates route already exists
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "192.168.99.0/24 via 192.168.1.1 dev eth0"
 
+        # define fake Ubuntu dev with duplicate route
         dev = Device(name="UbuntuHost")
         dev.custom = {
             'network_config': {
@@ -47,35 +49,39 @@ class TestUbuntuConfiguratorRouteDuplication(unittest.TestCase):
             }
         }
 
+        # instantiate configurator
         configurator = UbuntuNetworkConfigurator(dev)
 
+        # patch route_exists() method to simulate route is present
         with patch.object(configurator, 'route_exists', return_value=True) as mock_check:
             configurator.configure()
 
+        # assert 'ip route add' was not called for duplicate route
         for call_args in mock_run.call_args_list:
             if 'ip route add' in ' '.join(call_args[0][0]):
                 self.fail("Duplicate route was incorrectly added via subprocess")
 
+        # check that route_exists was called exactly once
         mock_check.assert_called_once_with('192.168.99.0/24')
 
 
 class TestSSHConnectorParamiko(unittest.TestCase):
     """
-    Unit tests for the SSHConnectorParamiko class.
-
-    Verifies SSH command execution, shell prompt detection, and connection setup.
+    Unit test for SSHConnectorParamiko.
+    Validates sending a command and reading its result via mocked SSH session.
     """
 
     @patch('ssh_connector_paramiko.paramiko.SSHClient')
     def test_ssh_connect_and_execute(self, mock_ssh_client):
         """
-        Simulates a valid SSH shell session and tests that
-        commands are sent and prompt-matching output is returned.
+        Simulates SSH connection and ensures command is sent and output is received.
         """
+        # create mock SSH shell
         mock_client = mock_ssh_client.return_value
         mock_shell = MagicMock()
         mock_client.invoke_shell.return_value = mock_shell
 
+        # configure shell to simulate that it has data ready 1-TIME-ONLY
         def side_effect_recv_ready():
             side_effect_recv_ready.calls += 1
             return side_effect_recv_ready.calls == 1
@@ -84,17 +90,20 @@ class TestSSHConnectorParamiko(unittest.TestCase):
         mock_shell.recv_ready.side_effect = side_effect_recv_ready
         mock_shell.recv.return_value = b'test prompt#'
 
+        # define test device
         device = Device(
             name='test-device',
             connections={'ssh': {'ip': '192.0.2.1'}},
             credentials={'default': {'username': 'user', 'password': 'pass'}}
         )
 
+        # inject mocked client and shell into connector
         connector = SSHConnectorParamiko(device)
         connector.client = mock_client
         connector.shell = mock_shell
         connector._connected = True
 
+        # execute a command and validate result
         output = connector.execute('show version', prompt='#')
         self.assertIn('test prompt#', output)
         mock_shell.send.assert_called_with(b'show version\n')
@@ -102,17 +111,16 @@ class TestSSHConnectorParamiko(unittest.TestCase):
 
 class TestTelnetConnector2(unittest.TestCase):
     """
-    Unit tests for the TelnetConnector2 class.
-
-    Validates Telnet connection, command execution, and disconnection.
+    Unit test for TelnetConnector2.
+    Verifies that commands are correctly sent and responses are captured.
     """
 
     @patch('telnet_connector2.telnetlib.Telnet')
     def test_telnet_connect_and_execute(self, mock_telnet):
         """
-        Simulates a Telnet session: verifies connection setup,
-        command execution, prompt reading, and connection teardown.
+        Simulates a Telnet session with connect/execute/disconnect flow.
         """
+        # define fake device
         device = Device(
             name='test-device',
             connections={
@@ -128,95 +136,49 @@ class TestTelnetConnector2(unittest.TestCase):
                 }
             }
         )
-
         connector = TelnetConnector2(device)
+
+        # simulate Telnet session
         mock_conn_instance = MagicMock()
         mock_telnet.return_value = mock_conn_instance
 
+        # test connection
         connector.connect(connection=device.connections.telnet)
         mock_telnet.assert_called_once_with(host='192.0.2.2', port=23, timeout=10)
 
+        # test command execution and prompt reading
         mock_conn_instance.expect.return_value = (0, None, b"output text")
         output = connector.execute('show version', prompt=[r'#'])
         mock_conn_instance.write.assert_called_once_with(b'show version\n')
         self.assertEqual(output, "output text")
 
+        # test connection status
         mock_conn_instance.eof = False
         self.assertTrue(connector.is_connected())
 
+        # test disconnection
         connector.disconnect()
         mock_conn_instance.close.assert_called_once()
 
 
-def interface_has_required_params(interface):
-    """
-    Utility function to validate that an interface has essential
-    attributes: type, link, and a valid IPv4 address.
-    """
-    return all([
-        hasattr(interface, 'type') and interface.type,
-        hasattr(interface, 'link') and interface.link,
-        hasattr(interface, 'ipv4') and interface.ipv4 and hasattr(interface.ipv4, 'ip')
-    ])
-
-
-class TestInterfaceParameters(unittest.TestCase):
-    """
-    Tests to ensure interfaces are valid and complete for automation.
-    """
-
-    def test_interface_has_all_required_parameters(self):
-        iface = MagicMock()
-        iface.name = "GigabitEthernet0/1"
-        iface.type = "ethernet"
-        iface.link = MagicMock()
-        iface.ipv4 = MagicMock()
-        iface.ipv4.ip = "192.168.1.1"
-
-        self.assertTrue(interface_has_required_params(iface))
-
-    def test_interface_missing_type(self):
-        iface = MagicMock()
-        iface.name = "GigabitEthernet0/1"
-        iface.type = None
-        iface.link = MagicMock()
-        iface.ipv4 = MagicMock()
-        iface.ipv4.ip = "192.168.1.1"
-        self.assertFalse(interface_has_required_params(iface))
-
-    def test_interface_missing_link(self):
-        iface = MagicMock()
-        iface.name = "GigabitEthernet0/1"
-        iface.type = "ethernet"
-        iface.link = None
-        iface.ipv4 = MagicMock()
-        iface.ipv4.ip = "192.168.1.1"
-        self.assertFalse(interface_has_required_params(iface))
-
-    def test_interface_missing_ipv4(self):
-        iface = MagicMock()
-        iface.name = "GigabitEthernet0/1"
-        iface.type = "ethernet"
-        iface.link = MagicMock()
-        iface.ipv4 = None
-        self.assertFalse(interface_has_required_params(iface))
-
-
 class TestSSHExecuteMethod(unittest.TestCase):
     """
-    Unit tests for the SSHConnectorParamiko.execute() method,
-    including timeout behavior and command output capture.
+    Tests for SSHConnectorParamiko.execute():
+    - Normal execution
+    - Not connected case
+    - Timeout behavior
     """
 
     @patch('ssh_connector_paramiko.paramiko.SSHClient')
     def test_execute_returns_output(self, mock_ssh_client):
+        # simulate receiving expected output
         mock_client = mock_ssh_client.return_value
         mock_shell = MagicMock()
         mock_client.invoke_shell.return_value = mock_shell
-
         mock_shell.recv_ready.side_effect = [True]
         mock_shell.recv.return_value = b"hostname#"
 
+        # dev mock
         device = Device(name="TestRouter")
         device.connections = {'ssh': {'ip': '192.168.0.1', 'port': 22}}
         device.credentials = {
@@ -231,6 +193,7 @@ class TestSSHExecuteMethod(unittest.TestCase):
         connector.shell = mock_shell
         connector._connected = True
 
+        # validate output and command sent
         output = connector.execute("show version", prompt="#")
         mock_shell.send.assert_called_with(b"show version\n")
         self.assertIn("hostname#", output)
@@ -238,8 +201,7 @@ class TestSSHExecuteMethod(unittest.TestCase):
     @patch('ssh_connector_paramiko.paramiko.SSHClient')
     def test_execute_raises_on_not_connected(self, mock_ssh_client):
         """
-        Verifies that execute() raises RuntimeError when
-        the SSH session is not connected.
+        Ensure that RuntimeError is raised if SSH is not connected.
         """
         device = Device(name="TestRouter")
         connector = SSHConnectorParamiko(device)
@@ -248,19 +210,17 @@ class TestSSHExecuteMethod(unittest.TestCase):
 
         with self.assertRaises(RuntimeError) as cm:
             connector.execute("show version")
-
         self.assertIn("SSH connection is not established", str(cm.exception))
 
     @patch('ssh_connector_paramiko.paramiko.SSHClient')
     def test_execute_raises_timeout_error(self, mock_ssh_client):
         """
-        Simulates a shell that never returns a prompt, triggering a timeout.
+        Simulates no prompt being received, which should trigger timeout.
         """
         mock_client = mock_ssh_client.return_value
         mock_shell = MagicMock()
         mock_client.invoke_shell.return_value = mock_shell
-
-        mock_shell.recv_ready.return_value = False
+        mock_shell.recv_ready.return_value = False  # no data ready ever
 
         device = Device(name="TimeoutDevice")
         device.connections = {'ssh': {'ip': '192.168.0.1', 'port': 22}}
@@ -278,25 +238,28 @@ class TestSSHExecuteMethod(unittest.TestCase):
 
         with self.assertRaises(RuntimeError) as cm:
             connector.execute("show running-config", prompt="#")
-
         self.assertIn("Timeout executing command", str(cm.exception))
 
 
 class TestAutofillMissingData(unittest.TestCase):
     """
-    Unit test for autofill_missing_data(). Ensures that missing device
-    attributes are automatically completed.
+    Test for autofill_missing_data(): ensures automatic completion of device attributes.
     """
 
     def setUp(self):
+        """
+        Create a mock testbed with two connected routers.
+        """
         self.tb = Testbed(name='mock-testbed')
         self.tb.devices = {}
 
+        # Router1 definition
         dev = Device(name="Router1", os="ios", testbed=self.tb)
         dev.custom = AttrDict()
         dev.connections = AttrDict()
         dev.interfaces = {}
 
+        # interface on Router1
         iface = Interface(name="GigabitEthernet0/0", type='ethernet', ipv4='', link='', alias='')
         iface.alias = "initial"
         iface.ipv4 = MagicMock()
@@ -306,6 +269,7 @@ class TestAutofillMissingData(unittest.TestCase):
         iface.link.connected_devices = [dev]
         dev.interfaces["GigabitEthernet0/0"] = iface
 
+        # neighbor Router2
         neighbor = Device(name="Router2", os="ios")
         neighbor.interfaces = {}
         neighbor_iface = Interface(name="GigabitEthernet0/1", type='ethernet', ipv4='', link='', alias='')
@@ -315,13 +279,13 @@ class TestAutofillMissingData(unittest.TestCase):
         neighbor.interfaces["GigabitEthernet0/1"] = neighbor_iface
         iface.link.connected_devices.append(neighbor)
 
+        # add devs to testbed
         self.tb.devices["Router1"] = dev
         self.tb.devices["Router2"] = neighbor
 
     def test_autofill_completes_required_fields(self):
         """
-        Verifies that autofill_missing_data correctly fills hostname, credentials,
-        SSH connection info, and static gateway.
+        Ensure that hostname, credentials, SSH config, and gateway are auto-completed.
         """
         autofill_missing_data(self.tb)
         dev = self.tb.devices["Router1"]
@@ -335,7 +299,6 @@ class TestAutofillMissingData(unittest.TestCase):
         self.assertEqual(dev.connections.ssh.ip, dev.interfaces["GigabitEthernet0/0"].ipv4.ip)
         self.assertIn("gateway", dev.custom)
         self.assertEqual(dev.custom.gateway["next_hop"], "192.168.1.254")
-
 
 if __name__ == '__main__':
     unittest.main()
